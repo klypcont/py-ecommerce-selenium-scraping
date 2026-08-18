@@ -2,9 +2,11 @@ from dataclasses import dataclass
 import csv
 from urllib.parse import urljoin
 from selenium import webdriver
-from selenium.common.exceptions import NoSuchElementException, ElementClickInterceptedException
+from selenium.common.exceptions import TimeoutException, ElementClickInterceptedException
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
 
 BASE_URL = "https://webscraper.io/"
@@ -51,18 +53,34 @@ def parse_product(product_element) -> Product:
     )
 
 
+def accept_cookies(driver: webdriver.Chrome) -> None:
+    try:
+        accept_btn = WebDriverWait(driver, 3).until(
+            EC.element_to_be_clickable((By.CSS_SELECTOR, ".acceptCookies, .cookie-accept, button.accept, .cc-accept"))
+        )
+        accept_btn.click()
+    except TimeoutException:
+        pass
+
+
 def scrape_page(driver: webdriver.Chrome, url: str) -> list[Product]:
     driver.get(url)
+    accept_cookies(driver)
 
     while True:
         try:
-            more_button = driver.find_element(By.CSS_SELECTOR, "a.btn.btn-primary.btn-lg.more-btn")
+            more_button = WebDriverWait(driver, 3).until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, "a.btn.btn-primary.btn-lg.more-btn"))
+            )
             if not more_button.is_displayed():
                 break
             driver.execute_script("arguments[0].click();", more_button)
-        except (NoSuchElementException, ElementClickInterceptedException):
+        except (TimeoutException, ElementClickInterceptedException):
             break
 
+    WebDriverWait(driver, 5).until(
+        EC.presence_of_element_located((By.CSS_SELECTOR, ".thumbnail"))
+    )
     product_elements = driver.find_elements(By.CSS_SELECTOR, ".thumbnail")
     return [parse_product(elem) for elem in product_elements]
 
